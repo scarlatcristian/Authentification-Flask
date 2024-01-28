@@ -10,6 +10,14 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
 
 # CREATE TABLE IN DB
 class User(UserMixin, db.Model):
@@ -18,6 +26,9 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(100))
     name = db.Column(db.String(1000))
 
+
+# Line below only required once, when creating DB.
+# db.create_all()
 
 @app.route('/')
 def home():
@@ -32,7 +43,6 @@ def register():
             method='pbkdf2:sha256',
             salt_length=8
         )
-        print(hash_and_salted_password)
         new_user = User(
             email=request.form.get('email'),
             name=request.form.get('name'),
@@ -40,12 +50,25 @@ def register():
         )
         db.session.add(new_user)
         db.session.commit()
+
+        login_user(new_user)
         return redirect(url_for('secrets'))
     return render_template("register.html")
 
 
-@app.route('/login')
+@app.route('/login', methods=['GET', 'POST'])
 def login():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+
+        # Find user by email
+        user = User.query.filter_by(email=email).first()
+
+        # Check store password hashed vs entered password hashed
+        if check_password_hash(user.password, password):
+            login_user(user)
+            return redirect(url_for('secrets'))
     return render_template("login.html")
 
 
